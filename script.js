@@ -32,9 +32,28 @@ const targetTypes = {
 }
 
 class Target {
-	constructor({ interval = new Interval(), targetType = targetTypes.start }) {
+	constructor({
+		interval = new Interval(),
+		targetType = targetTypes.start,
+		x = 0,
+	}) {
 		this.interval = interval
-		this.targetType = targetType
+		this.type = targetType
+		this.x = x
+	}
+	increment(value) {
+		switch (this.type) {
+			case targetTypes.start:
+				this.interval.start += value
+				break
+			case targetTypes.end:
+				this.interval.end += value
+				break
+			case targetTypes.whole:
+				this.interval.start += value
+				this.interval.end += value
+				break
+		}
 	}
 }
 
@@ -46,7 +65,7 @@ const cursor = {
 }
 
 const minMouseDist = 3
-const minMouseMove = 3
+const minMouseMove = 2
 
 class Intervals {
 	constructor(canvas) {
@@ -92,13 +111,15 @@ class Intervals {
 	}
 	offsetXToValue(offsetX) {
 		const { width, startVal, endVal } = this
-		const normalX = offsetX / width
-		return startVal + normalX * (endVal - startVal)
+		return (offsetX / width) * (endVal - startVal) + startVal
 	}
-	valueToOffsetX(val) {
-		const { width, startVal, endVal } = this
-		const normalX = (val - startVal) / (endVal - startVal)
-		return width * normalX
+	valueToOffsetX(value) {
+		const { startVal, endVal, width } = this
+		return ((value - startVal) / (endVal - startVal)) * width
+	}
+	pixelToValueRatio() {
+		const { startVal, endVal, width } = this
+		return width / (endVal - startVal)
 	}
 	updateSizeInfo() {
 		const { canvas } = this
@@ -128,6 +149,16 @@ class Intervals {
 			}
 			ctx.fillStyle = color
 			ctx.fillRect(startX, itemStartY, endX - startX, itemHeight)
+
+			ctx.strokeStyle = '#ccc'
+			ctx.lineWidth = 2
+			ctx.lineCap = 'round'
+			ctx.beginPath()
+			ctx.moveTo(startX, itemStartY)
+			ctx.lineTo(startX, itemStartY + itemHeight)
+			ctx.moveTo(endX, itemStartY)
+			ctx.lineTo(endX, itemStartY + itemHeight)
+			ctx.stroke()
 		}
 	}
 	updateFrame() {
@@ -142,6 +173,9 @@ class Intervals {
 				this.setMouseIsDown(true)
 			}
 		})
+		canvas.addEventListener('mouseover', (e) => {
+			this.setMouseIsDown(hasLeftButton(e.buttons))
+		})
 		canvas.addEventListener('mousemove', (e) => {
 			this.setMouseCoords(...eventCoords(e))
 			if (!hasLeftButton(e.buttons)) {
@@ -154,9 +188,8 @@ class Intervals {
 				this.setMouseIsDown(false)
 			}
 		})
-		canvas.addEventListener('mouseout', () => {
-			this.setMouseIsDown(false)
-			this.setMouseCoords(null, null)
+		canvas.addEventListener('mouseleave', (e) => {
+			this.setCursor(cursor.default)
 		})
 		canvas.addEventListener('wheel', (e) => {
 			if (!this.mouseIsDown) {
@@ -170,9 +203,7 @@ class Intervals {
 
 		this.mouseX = x
 		this.mouseY = y
-		if (x === null) {
-			this.handleMouseOut()
-		} else {
+		if (x !== null) {
 			this.handleMouseMove()
 		}
 	}
@@ -186,18 +217,17 @@ class Intervals {
 			this.handleMouseUp()
 		}
 	}
-	handleMouseDown() {
-		this.startClick = {
-			x: this.mouseX,
-			y: this.mouseY,
-			moved: false,
-			target: this.getHoveredTarget(),
-		}
-	}
-	handleMouseUp() {}
-	handleMouseMove() {
+	updateCursor() {
 		const target = this.getHoveredTarget()
-		switch (target?.targetType) {
+		if (!target) {
+			this.setCursor(cursor.default)
+			return
+		}
+		if (this.startClick?.moved) {
+			this.setCursor(cursor.grabbing)
+			return
+		}
+		switch (target?.type) {
 			case targetTypes.start:
 				this.setCursor(cursor.colResize)
 				break
@@ -207,11 +237,46 @@ class Intervals {
 			case targetTypes.whole:
 				this.setCursor(cursor.grab)
 				break
-			default:
-				this.setCursor(cursor.default)
 		}
 	}
-	handleMouseOut() {}
+	handleMouseDown() {
+		this.startClick = {
+			x: this.mouseX,
+			y: this.mouseY,
+			lastX: this.mouseX,
+			moved: false,
+			target: this.getHoveredTarget(),
+		}
+	}
+	handleMouseUp() {
+		if (this.startClick) {
+			this.startClick = null
+		}
+	}
+	handleMouseMove() {
+		const { startClick } = this
+		let rerender = false
+		if (startClick && startClick.target) {
+			if (!startClick.moved) {
+				const dist = Math.hypot(
+					this.mouseX - startClick.x,
+					this.mouseY - startClick.y
+				)
+				startClick.moved = dist >= minMouseMove
+				startClick.lastX = startClick.target.x
+			}
+			if (startClick.moved) {
+				const dx = this.mouseX - startClick.lastX
+				startClick.target.increment(dx / this.pixelToValueRatio())
+				startClick.lastX = this.mouseX
+				rerender = true
+			}
+		}
+		if (rerender) {
+			this.updateFrame()
+		}
+		this.updateCursor()
+	}
 	handleScroll(sign) {
 		const { zoomFactor, startVal, endVal, width, mouseX } = this
 		const scale = sign < 0 ? 1 / zoomFactor : zoomFactor
@@ -253,7 +318,11 @@ class Intervals {
 				continue
 			}
 
-			target = new Target({ interval, targetType })
+			target = new Target({
+				interval,
+				targetType,
+				x: targetType === targetTypes.whole ? x : targetX,
+			})
 			minDist = closestEndDist
 		}
 
