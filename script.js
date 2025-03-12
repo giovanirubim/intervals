@@ -4,7 +4,7 @@ class Interval {
 		start = 0,
 		end = 0,
 		moveable = true,
-		color = '#ccc',
+		color = '#888',
 	}) {
 		this.id = id
 		this.range = [start, end]
