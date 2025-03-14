@@ -1,15 +1,38 @@
+const targetTypes = {
+	start: 0,
+	end: 1,
+	whole: 2,
+}
+
+const cursor = {
+	default: 'default',
+	grab: 'grab',
+	grabbing: 'grabbing',
+	colResize: 'col-resize',
+}
+
+const color = {
+	block: '#eee',
+	blockEndLine: '#444',
+}
+
+const minMouseDist = 3
+const minMouseMove = 2
+
+function clamp(value, min, max) {
+	return Math.min(Math.max(value, min), max)
+}
+
+function applyStep(value, step) {
+	if (!step) return value
+	return Math.round(value / step) * step
+}
+
 class Interval {
-	constructor({
-		id = 0,
-		start = 0,
-		end = 0,
-		moveable = true,
-		color = '#888',
-	}) {
+	constructor({ id = 0, start = 0, end = 0, moveable = true }) {
 		this.id = id
 		this.range = [start, end]
 		this.moveable = moveable
-		this.color = color
 	}
 	get start() {
 		return this.range[0]
@@ -25,12 +48,6 @@ class Interval {
 	}
 }
 
-const targetTypes = {
-	start: 0,
-	end: 1,
-	whole: 2,
-}
-
 class Target {
 	constructor({
 		interval = new Interval(),
@@ -40,32 +57,34 @@ class Target {
 		this.interval = interval
 		this.type = targetType
 		this.x = x
+		this.originalRange = [...interval.range]
 	}
-	increment(value) {
-		switch (this.type) {
+	applyOffsetValue(value, min, max, step) {
+		const { interval, type, originalRange } = this
+		let [start, end] = originalRange
+		switch (type) {
 			case targetTypes.start:
-				this.interval.start += value
+				start = clamp(
+					applyStep(start + value, step),
+					min,
+					Math.min(end, max)
+				)
 				break
 			case targetTypes.end:
-				this.interval.end += value
+				end = clamp(
+					applyStep(end + value, step),
+					Math.max(start, min),
+					max
+				)
 				break
 			case targetTypes.whole:
-				this.interval.start += value
-				this.interval.end += value
-				break
+				start = clamp(applyStep(start + value, step), min, max)
+				end = clamp(applyStep(end + value, step), min, max)
 		}
+		interval.start = start
+		interval.end = end
 	}
 }
-
-const cursor = {
-	default: 'default',
-	grab: 'grab',
-	grabbing: 'grabbing',
-	colResize: 'col-resize',
-}
-
-const minMouseDist = 3
-const minMouseMove = 2
 
 class Intervals {
 	constructor(canvas) {
@@ -74,10 +93,10 @@ class Intervals {
 		this.canvas = canvas
 		this.ctx = ctx
 
-		this.startVal = 0
-		this.endVal = 10000
+		this.startVal = 2
+		this.endVal = 10
 
-		this.minStart = 0
+		this.minStart = -Infinity
 		this.maxEnd = Infinity
 
 		this.width = 0
@@ -90,13 +109,13 @@ class Intervals {
 		this.startClick = null
 
 		this.items = [
-			new Interval({ id: 1, start: 3000, end: 4000 }),
-			new Interval({ id: 2, start: 4500, end: 8000, moveable: false }),
+			new Interval({ id: 1, start: 3, end: 4 }),
+			new Interval({ id: 2, start: 4.5, end: 8, moveable: false }),
 		]
 
 		// settings
 		this.zoomFactor = 1.1
-		this.step = 1
+		this.step = null
 
 		this.updateSizeInfo()
 		this.bindMouseEvents()
@@ -140,17 +159,16 @@ class Intervals {
 		for (const item of items) {
 			const {
 				range: [start, end],
-				color,
 			} = item
 			const startX = start * mulX + sumX
 			const endX = end * mulX + sumX
 			if (endX < 0 || startX > width) {
 				continue
 			}
-			ctx.fillStyle = color
+			ctx.fillStyle = color.block
 			ctx.fillRect(startX, itemStartY, endX - startX, itemHeight)
 
-			ctx.strokeStyle = '#ccc'
+			ctx.strokeStyle = color.blockEndLine
 			ctx.lineWidth = 2
 			ctx.lineCap = 'round'
 			ctx.beginPath()
@@ -243,7 +261,6 @@ class Intervals {
 		this.startClick = {
 			x: this.mouseX,
 			y: this.mouseY,
-			lastX: this.mouseX,
 			moved: false,
 			target: this.getHoveredTarget(),
 		}
@@ -263,12 +280,16 @@ class Intervals {
 					this.mouseY - startClick.y
 				)
 				startClick.moved = dist >= minMouseMove
-				startClick.lastX = startClick.target.x
 			}
 			if (startClick.moved) {
-				const dx = this.mouseX - startClick.lastX
-				startClick.target.increment(dx / this.pixelToValueRatio())
-				startClick.lastX = this.mouseX
+				const dx = this.mouseX - startClick.x
+				const offsetValue = dx / this.pixelToValueRatio()
+				startClick.target.applyOffsetValue(
+					offsetValue,
+					this.minStart,
+					this.maxEnd,
+					this.step
+				)
 				rerender = true
 			}
 		}
