@@ -32,8 +32,8 @@ export class Intervals {
     mouseY;
     mouseIsDown;
     startClick;
-    itemUpdateHandler;
-    viewRangeUpdateHandler;
+    onUpdateItem;
+    onUpdateView;
     constructor(canvas, options) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
@@ -50,10 +50,6 @@ export class Intervals {
         this.startClick = null;
         this.updateSizeInfo();
         this.bindMouseEvents();
-    }
-    setItems(items) {
-        this.items = items;
-        this.updateFrame();
     }
     setCursor(cursor) {
         this.canvas.style.cursor = cursor;
@@ -224,7 +220,7 @@ export class Intervals {
         const mouseVal = startVal + normalX * range;
         this.startVal = Math.max(this.minStart, mouseVal - newRange * normalX);
         this.endVal = Math.min(this.maxEnd, this.startVal + newRange);
-        this.triggerViewRangeUpdate();
+        this.triggerViewUpdate();
         this.updateFrame();
     }
     getHoveredTarget() {
@@ -261,10 +257,28 @@ export class Intervals {
         return target;
     }
     triggerUpdateHandler(item) {
-        this.itemUpdateHandler?.(item);
+        this.onUpdateItem?.(item);
     }
-    triggerViewRangeUpdate() {
-        this.viewRangeUpdateHandler?.(this.startVal, this.endVal);
+    triggerViewUpdate() {
+        this.onUpdateView?.(this.startVal, this.endVal);
+    }
+    setItems(items) {
+        this.items = items;
+        this.updateFrame();
+    }
+    updateView(start, end) {
+        if (start === this.startVal && end === this.endVal) {
+            return;
+        }
+        this.startVal = start;
+        this.endVal = end;
+        this.updateFrame();
+    }
+    resizeCanvas(width, height) {
+        this.canvas.width = width;
+        this.canvas.height = height;
+        this.updateSizeInfo();
+        this.updateFrame();
     }
 }
 //# sourceMappingURL=intervals.js.map

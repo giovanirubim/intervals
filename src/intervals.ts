@@ -34,27 +34,27 @@ function hasLeftButton(buttonsCode: number): boolean {
 }
 
 export class Intervals {
-	canvas: HTMLCanvasElement
-	ctx: CanvasRenderingContext2D
-	width: number = 0
-	height: number = 0
+	private canvas: HTMLCanvasElement
+	private ctx: CanvasRenderingContext2D
+	private width: number = 0
+	private height: number = 0
 
-	startVal: number
-	endVal: number
-	minStart: number
-	maxEnd: number
-	zoomFactor: number
-	step: number
+	private startVal: number
+	private endVal: number
+	private minStart: number
+	private maxEnd: number
+	private zoomFactor: number
+	private step: number
 
-	items: Interval[]
+	private items: Interval[]
 
-	mouseX: number | null
-	mouseY: number | null
-	mouseIsDown: boolean
-	startClick: StartClick | null
+	private mouseX: number | null
+	private mouseY: number | null
+	private mouseIsDown: boolean
+	private startClick: StartClick | null
 
-	itemUpdateHandler?: (item: Interval) => void
-	viewRangeUpdateHandler?: (start: number, end: number) => void
+	onUpdateItem?: (item: Interval) => void
+	onUpdateView?: (start: number, end: number) => void
 
 	constructor(canvas: HTMLCanvasElement, options: IntervalsOptions) {
 		this.canvas = canvas
@@ -76,10 +76,6 @@ export class Intervals {
 
 		this.updateSizeInfo()
 		this.bindMouseEvents()
-	}
-	setItems(items: Interval[]) {
-		this.items = items
-		this.updateFrame()
 	}
 	private setCursor(cursor: Cursor) {
 		this.canvas.style.cursor = cursor
@@ -262,7 +258,7 @@ export class Intervals {
 		this.startVal = Math.max(this.minStart, mouseVal - newRange * normalX)
 		this.endVal = Math.min(this.maxEnd, this.startVal + newRange)
 
-		this.triggerViewRangeUpdate()
+		this.triggerViewUpdate()
 		this.updateFrame()
 	}
 	private getHoveredTarget(): Target | null {
@@ -304,9 +300,27 @@ export class Intervals {
 		return target
 	}
 	private triggerUpdateHandler(item: Interval) {
-		this.itemUpdateHandler?.(item)
+		this.onUpdateItem?.(item)
 	}
-	private triggerViewRangeUpdate() {
-		this.viewRangeUpdateHandler?.(this.startVal, this.endVal)
+	private triggerViewUpdate() {
+		this.onUpdateView?.(this.startVal, this.endVal)
+	}
+	setItems(items: Interval[]) {
+		this.items = items
+		this.updateFrame()
+	}
+	updateView(start: number, end: number) {
+		if (start === this.startVal && end === this.endVal) {
+			return
+		}
+		this.startVal = start
+		this.endVal = end
+		this.updateFrame()
+	}
+	resizeCanvas(width: number, height: number) {
+		this.canvas.width = width
+		this.canvas.height = height
+		this.updateSizeInfo()
+		this.updateFrame()
 	}
 }
