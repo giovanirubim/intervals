@@ -1,155 +1,107 @@
-const targetTypes = {
-	start: 0,
-	end: 1,
-	whole: 2,
+import { Interval } from './interval.js'
+import { IntervalsOptions } from './intervals-options.js'
+import { Color, Cursor, minMouseDist, minMouseMove } from './presets.js'
+import { Target } from './target.js'
+import { TargetType } from './target-type.js'
+
+interface StartClick {
+	x: number
+	y: number
+	moved: boolean
+	target: Target | null
 }
 
-const cursor = {
-	default: 'default',
-	grab: 'grab',
-	grabbing: 'grabbing',
-	colResize: 'col-resize',
+function closestValue(target: number, a: number, b: number): number {
+	const da = Math.abs(target - a)
+	const db = Math.abs(target - b)
+	return da <= db ? a : b
 }
 
-const color = {
-	block: '#eee',
-	blockEndLine: '#444',
+function eventCoords(e: {
+	offsetX: number
+	offsetY: number
+}): [number, number] {
+	const { offsetX, offsetY } = e
+	return [offsetX, offsetY]
 }
 
-const minMouseDist = 3
-const minMouseMove = 2
-
-function clamp(value, min, max) {
-	return Math.min(Math.max(value, min), max)
+function isLeftButton(buttonCode: number): boolean {
+	return buttonCode === 0
 }
 
-function applyStep(value, step) {
-	if (!step) return value
-	return Math.round(value / step) * step
+function hasLeftButton(buttonsCode: number): boolean {
+	return (buttonsCode & 1) !== 0
 }
 
-class Interval {
-	constructor({ id = 0, start = 0, end = 0, moveable = true }) {
-		this.id = id
-		this.range = [start, end]
-		this.moveable = moveable
-	}
-	get start() {
-		return this.range[0]
-	}
-	get end() {
-		return this.range[1]
-	}
-	set start(val) {
-		this.range[0] = val
-	}
-	set end(val) {
-		this.range[1] = val
-	}
-}
+export class Intervals {
+	canvas: HTMLCanvasElement
+	ctx: CanvasRenderingContext2D
+	width: number = 0
+	height: number = 0
 
-class Target {
-	constructor({
-		interval = new Interval(),
-		targetType = targetTypes.start,
-		x = 0,
-	}) {
-		this.interval = interval
-		this.type = targetType
-		this.x = x
-		this.originalRange = [...interval.range]
-	}
-	applyOffsetValue(value, min, max, step) {
-		const { interval, type, originalRange } = this
-		let [start, end] = originalRange
-		switch (type) {
-			case targetTypes.start:
-				start = clamp(
-					applyStep(start + value, step),
-					min,
-					Math.min(end, max)
-				)
-				break
-			case targetTypes.end:
-				end = clamp(
-					applyStep(end + value, step),
-					Math.max(start, min),
-					max
-				)
-				break
-			case targetTypes.whole:
-				start = clamp(applyStep(start + value, step), min, max)
-				end = clamp(applyStep(end + value, step), min, max)
-		}
-		interval.start = start
-		interval.end = end
-	}
-}
+	startVal: number
+	endVal: number
+	minStart: number
+	maxEnd: number
+	zoomFactor: number
+	step: number
 
-class Intervals {
-	constructor(canvas) {
-		const ctx = canvas.getContext('2d')
+	items: Interval[]
 
+	mouseX: number | null
+	mouseY: number | null
+	mouseIsDown: boolean
+	startClick: StartClick | null
+
+	itemUpdateHandler?: (item: Interval) => void
+	viewRangeUpdateHandler?: (start: number, end: number) => void
+
+	constructor(canvas: HTMLCanvasElement, options: IntervalsOptions) {
 		this.canvas = canvas
-		this.ctx = ctx
+		this.ctx = canvas.getContext('2d')!
 
-		this.startVal = 2
-		this.endVal = 10
+		this.startVal = options.startVal
+		this.endVal = options.endVal
+		this.minStart = options.minStart ?? -Infinity
+		this.maxEnd = options.maxEnd ?? Infinity
+		this.zoomFactor = options.zoomFactor ?? 1.1
+		this.step = options.step ?? 0
 
-		this.minStart = -Infinity
-		this.maxEnd = Infinity
+		this.items = []
 
-		this.width = 0
-		this.height = 0
-
-		// mouse
 		this.mouseX = null
 		this.mouseY = null
 		this.mouseIsDown = false
 		this.startClick = null
 
-		this.items = [
-			new Interval({ id: 1, start: 3, end: 4 }),
-			new Interval({ id: 2, start: 4.5, end: 8, moveable: false }),
-		]
-
-		// settings
-		this.zoomFactor = 1.1
-		this.step = null
-
 		this.updateSizeInfo()
 		this.bindMouseEvents()
 	}
-	applyStep(value) {
-		const { step } = this
-		if (step === 0) return value
-		return Math.round(value / step) * step
+	setItems(items: Interval[]) {
+		this.items = items
+		this.updateFrame()
 	}
-	setCursor(cursorType) {
-		this.canvas.style.cursor = cursorType
+	private setCursor(cursor: Cursor) {
+		this.canvas.style.cursor = cursor
 	}
-	offsetXToValue(offsetX) {
-		const { width, startVal, endVal } = this
-		return (offsetX / width) * (endVal - startVal) + startVal
-	}
-	valueToOffsetX(value) {
+	private valueToOffsetX(value: number): number {
 		const { startVal, endVal, width } = this
 		return ((value - startVal) / (endVal - startVal)) * width
 	}
-	pixelToValueRatio() {
+	private pixelToValueRatio(): number {
 		const { startVal, endVal, width } = this
 		return width / (endVal - startVal)
 	}
-	updateSizeInfo() {
+	private updateSizeInfo() {
 		const { canvas } = this
 		this.width = canvas.width
 		this.height = canvas.height
 	}
-	clearCanvas() {
+	private clearCanvas() {
 		const { ctx, width, height } = this
 		ctx.clearRect(0, 0, width, height)
 	}
-	drawFrame() {
+	private drawFrame() {
 		const { ctx, width, height, items, startVal, endVal } = this
 		const itemHeight = height * 0.8
 		const itemStartY = (height - itemHeight) / 2
@@ -157,18 +109,16 @@ class Intervals {
 		const sumX = -startVal * mulX
 
 		for (const item of items) {
-			const {
-				range: [start, end],
-			} = item
+			const { start, end } = item
 			const startX = start * mulX + sumX
 			const endX = end * mulX + sumX
 			if (endX < 0 || startX > width) {
 				continue
 			}
-			ctx.fillStyle = color.block
+			ctx.fillStyle = Color.Block
 			ctx.fillRect(startX, itemStartY, endX - startX, itemHeight)
 
-			ctx.strokeStyle = color.blockEndLine
+			ctx.strokeStyle = Color.BlockEndLine
 			ctx.lineWidth = 2
 			ctx.lineCap = 'round'
 			ctx.beginPath()
@@ -179,11 +129,11 @@ class Intervals {
 			ctx.stroke()
 		}
 	}
-	updateFrame() {
+	private updateFrame() {
 		this.clearCanvas()
 		this.drawFrame()
 	}
-	bindMouseEvents() {
+	private bindMouseEvents() {
 		const { canvas } = this
 		canvas.addEventListener('mousedown', (e) => {
 			this.setMouseCoords(...eventCoords(e))
@@ -207,7 +157,7 @@ class Intervals {
 			}
 		})
 		canvas.addEventListener('mouseleave', (e) => {
-			this.setCursor(cursor.default)
+			this.setCursor(Cursor.Default)
 		})
 		canvas.addEventListener('wheel', (e) => {
 			if (!this.mouseIsDown) {
@@ -215,7 +165,7 @@ class Intervals {
 			}
 		})
 	}
-	setMouseCoords(x, y) {
+	private setMouseCoords(x: number, y: number) {
 		const { mouseX, mouseY } = this
 		if (x === mouseX && y === mouseY) return
 
@@ -225,7 +175,7 @@ class Intervals {
 			this.handleMouseMove()
 		}
 	}
-	setMouseIsDown(mouseIsDown) {
+	private setMouseIsDown(mouseIsDown: boolean) {
 		if (mouseIsDown === this.mouseIsDown) return
 
 		this.mouseIsDown = mouseIsDown
@@ -235,61 +185,63 @@ class Intervals {
 			this.handleMouseUp()
 		}
 	}
-	updateCursor() {
+	private updateCursor() {
 		const target = this.getHoveredTarget()
 		if (!target) {
-			this.setCursor(cursor.default)
+			this.setCursor(Cursor.Default)
 			return
 		}
 		if (this.startClick?.moved) {
-			this.setCursor(cursor.grabbing)
+			this.setCursor(Cursor.Grabbing)
 			return
 		}
 		switch (target?.type) {
-			case targetTypes.start:
-				this.setCursor(cursor.colResize)
+			case TargetType.Start:
+				this.setCursor(Cursor.ColResize)
 				break
-			case targetTypes.end:
-				this.setCursor(cursor.colResize)
+			case TargetType.End:
+				this.setCursor(Cursor.ColResize)
 				break
-			case targetTypes.whole:
-				this.setCursor(cursor.grab)
+			case TargetType.Whole:
+				this.setCursor(Cursor.Grab)
 				break
 		}
 	}
-	handleMouseDown() {
+	private handleMouseDown() {
 		this.startClick = {
-			x: this.mouseX,
-			y: this.mouseY,
+			x: this.mouseX!,
+			y: this.mouseY!,
 			moved: false,
 			target: this.getHoveredTarget(),
 		}
 	}
-	handleMouseUp() {
+	private handleMouseUp() {
 		if (this.startClick) {
 			this.startClick = null
 		}
 	}
-	handleMouseMove() {
+	private handleMouseMove() {
 		const { startClick } = this
 		let rerender = false
 		if (startClick && startClick.target) {
+			const { target } = startClick
 			if (!startClick.moved) {
 				const dist = Math.hypot(
-					this.mouseX - startClick.x,
-					this.mouseY - startClick.y
+					this.mouseX! - startClick.x,
+					this.mouseY! - startClick.y
 				)
 				startClick.moved = dist >= minMouseMove
 			}
 			if (startClick.moved) {
-				const dx = this.mouseX - startClick.x
+				const dx = this.mouseX! - startClick.x
 				const offsetValue = dx / this.pixelToValueRatio()
-				startClick.target.applyOffsetValue(
+				target.applyOffsetValue(
 					offsetValue,
 					this.minStart,
 					this.maxEnd,
 					this.step
 				)
+				this.triggerUpdateHandler(target.interval)
 				rerender = true
 			}
 		}
@@ -298,24 +250,26 @@ class Intervals {
 		}
 		this.updateCursor()
 	}
-	handleScroll(sign) {
+	private handleScroll(sign: number) {
 		const { zoomFactor, startVal, endVal, width, mouseX } = this
 		const scale = sign < 0 ? 1 / zoomFactor : zoomFactor
 
 		const range = endVal - startVal
 		const newRange = range * scale
-		const normalX = mouseX / width
+		const normalX = mouseX! / width
 		const mouseVal = startVal + normalX * range
 
 		this.startVal = Math.max(this.minStart, mouseVal - newRange * normalX)
 		this.endVal = Math.min(this.maxEnd, this.startVal + newRange)
+
+		this.triggerViewRangeUpdate()
 		this.updateFrame()
 	}
-	getHoveredTarget() {
-		const x = this.mouseX
+	private getHoveredTarget(): Target | null {
+		const x = this.mouseX!
 
 		let minDist = Infinity
-		let target = null
+		let target: Target | null = null
 
 		for (const interval of this.items) {
 			const { start, end } = interval
@@ -329,12 +283,12 @@ class Intervals {
 			const startDist = Math.abs(startX - x)
 			const endDist = Math.abs(endX - x)
 
-			let targetType = targetTypes.whole
+			let targetType = TargetType.Whole
 
 			if (startDist < endDist && startDist <= minMouseDist) {
-				targetType = targetTypes.start
+				targetType = TargetType.Start
 			} else if (endDist < startDist && endDist <= minMouseDist) {
-				targetType = targetTypes.end
+				targetType = TargetType.End
 			} else if (x < startX || x >= endX) {
 				continue
 			}
@@ -342,33 +296,17 @@ class Intervals {
 			target = new Target({
 				interval,
 				targetType,
-				x: targetType === targetTypes.whole ? x : targetX,
+				x: targetType === TargetType.Whole ? x : targetX,
 			})
 			minDist = closestEndDist
 		}
 
 		return target
 	}
+	private triggerUpdateHandler(item: Interval) {
+		this.itemUpdateHandler?.(item)
+	}
+	private triggerViewRangeUpdate() {
+		this.viewRangeUpdateHandler?.(this.startVal, this.endVal)
+	}
 }
-
-const closestValue = (target, a, b) => {
-	const da = Math.abs(target - a)
-	const db = Math.abs(target - b)
-	return da <= db ? a : b
-}
-
-const eventCoords = (e) => {
-	const { offsetX, offsetY } = e
-	return [offsetX, offsetY]
-}
-
-const isLeftButton = (buttonCode) => {
-	return buttonCode === 0
-}
-
-const hasLeftButton = (buttonsCode) => {
-	return (buttonsCode & 1) !== 0
-}
-
-const intervals = new Intervals(document.querySelector('canvas'))
-intervals.drawFrame()

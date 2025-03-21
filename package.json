@@ -1,0 +1,19 @@
+{
+	"name": "intervals-ui",
+	"version": "0.0.1",
+	"main": "build/index.js",
+	"types": "build/index.d.js",
+	"type": "module",
+	"scripts": {
+		"build": "npx tsc --declaration"
+	},
+	"keywords": [
+		"intervals"
+	],
+	"author": "Giovani Rubim Francisco",
+	"license": "ISC",
+	"description": "UI component to manage intervals",
+	"devDependencies": {
+		"typescript": "^5.8.2"
+	}
+}
