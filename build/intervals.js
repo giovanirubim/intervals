@@ -34,6 +34,7 @@ export class Intervals {
     startClick;
     onUpdateItem;
     onUpdateView;
+    onItemClick;
     constructor(canvas, options) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
@@ -84,7 +85,7 @@ export class Intervals {
             if (endX < 0 || startX > width) {
                 continue;
             }
-            ctx.fillStyle = Color.Block;
+            ctx.fillStyle = item.highlight ? Color.BlockHighlight : Color.Block;
             ctx.fillRect(startX, itemStartY, endX - startX, itemHeight);
             ctx.strokeStyle = Color.BlockEndLine;
             ctx.lineWidth = 2;
@@ -185,9 +186,14 @@ export class Intervals {
         };
     }
     handleMouseUp() {
-        if (this.startClick) {
-            this.startClick = null;
+        if (!this.startClick) {
+            return;
         }
+        const { moved, target } = this.startClick;
+        if (!moved && target) {
+            this.onItemClick?.(target.interval);
+        }
+        this.startClick = null;
     }
     handleMouseMove() {
         const { startClick } = this;

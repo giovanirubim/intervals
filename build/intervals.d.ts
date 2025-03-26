@@ -18,6 +18,7 @@ export declare class Intervals {
     private startClick;
     onUpdateItem?: (item: Interval) => void;
     onUpdateView?: (start: number, end: number) => void;
+    onItemClick?: (item: Interval) => void;
     constructor(canvas: HTMLCanvasElement, options: IntervalsOptions);
     private setCursor;
     private valueToOffsetX;

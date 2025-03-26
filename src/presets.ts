@@ -6,7 +6,8 @@ export enum Cursor {
 }
 
 export enum Color {
-	Block = '#eee',
+	Block = '#ddd',
+	BlockHighlight = '#fff',
 	BlockEndLine = '#444',
 }
 

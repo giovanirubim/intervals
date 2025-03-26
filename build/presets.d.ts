@@ -5,7 +5,8 @@ export declare enum Cursor {
     ColResize = "col-resize"
 }
 export declare enum Color {
-    Block = "#eee",
+    Block = "#ddd",
+    BlockHighlight = "#fff",
     BlockEndLine = "#444"
 }
 export declare const minMouseDist = 3;

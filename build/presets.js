@@ -7,7 +7,8 @@ export var Cursor;
 })(Cursor || (Cursor = {}));
 export var Color;
 (function (Color) {
-    Color["Block"] = "#eee";
+    Color["Block"] = "#ddd";
+    Color["BlockHighlight"] = "#fff";
     Color["BlockEndLine"] = "#444";
 })(Color || (Color = {}));
 export const minMouseDist = 3;
