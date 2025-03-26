@@ -27,11 +27,13 @@ export class Intervals {
     maxEnd;
     zoomFactor;
     step;
-    items;
-    mouseX;
-    mouseY;
-    mouseIsDown;
-    startClick;
+    items = [];
+    mouseX = null;
+    mouseY = null;
+    mouseIsDown = false;
+    startClick = null;
+    frameUpdateRequest = null;
+    frameIsUpdated = false;
     onUpdateItem;
     onUpdateView;
     onItemClick;
@@ -44,13 +46,21 @@ export class Intervals {
         this.maxEnd = options.maxEnd ?? Infinity;
         this.zoomFactor = options.zoomFactor ?? 1.1;
         this.step = options.step ?? 0;
-        this.items = [];
-        this.mouseX = null;
-        this.mouseY = null;
-        this.mouseIsDown = false;
-        this.startClick = null;
         this.updateSizeInfo();
         this.bindMouseEvents();
+    }
+    requestFrameUpdate() {
+        this.frameIsUpdated = false;
+        if (this.frameUpdateRequest !== null)
+            return;
+        this.frameUpdateRequest = requestAnimationFrame(() => {
+            this.frameUpdateRequest = null;
+            if (this.frameIsUpdated)
+                return;
+            this.clearCanvas();
+            this.drawFrame();
+            this.frameIsUpdated = true;
+        });
     }
     setCursor(cursor) {
         this.canvas.style.cursor = cursor;
@@ -97,10 +107,6 @@ export class Intervals {
             ctx.lineTo(endX, itemStartY + itemHeight);
             ctx.stroke();
         }
-    }
-    updateFrame() {
-        this.clearCanvas();
-        this.drawFrame();
     }
     bindMouseEvents() {
         const { canvas } = this;
@@ -197,7 +203,6 @@ export class Intervals {
     }
     handleMouseMove() {
         const { startClick } = this;
-        let rerender = false;
         if (startClick && startClick.target) {
             const { target } = startClick;
             if (!startClick.moved) {
@@ -208,12 +213,9 @@ export class Intervals {
                 const dx = this.mouseX - startClick.x;
                 const offsetValue = dx / this.pixelToValueRatio();
                 target.applyOffsetValue(offsetValue, this.minStart, this.maxEnd, this.step);
-                this.triggerUpdateHandler(target.interval);
-                rerender = true;
+                this.onUpdateItem?.(target.interval);
+                this.requestFrameUpdate();
             }
-        }
-        if (rerender) {
-            this.updateFrame();
         }
         this.updateCursor();
     }
@@ -226,8 +228,8 @@ export class Intervals {
         const mouseVal = startVal + normalX * range;
         this.startVal = Math.max(this.minStart, mouseVal - newRange * normalX);
         this.endVal = Math.min(this.maxEnd, this.startVal + newRange);
-        this.triggerViewUpdate();
-        this.updateFrame();
+        this.onUpdateView?.(this.startVal, this.endVal);
+        this.requestFrameUpdate();
     }
     getHoveredTarget() {
         const x = this.mouseX;
@@ -262,15 +264,9 @@ export class Intervals {
         }
         return target;
     }
-    triggerUpdateHandler(item) {
-        this.onUpdateItem?.(item);
-    }
-    triggerViewUpdate() {
-        this.onUpdateView?.(this.startVal, this.endVal);
-    }
     setItems(items) {
         this.items = items;
-        this.updateFrame();
+        this.requestFrameUpdate();
     }
     updateView(start, end) {
         if (start === this.startVal && end === this.endVal) {
@@ -278,13 +274,13 @@ export class Intervals {
         }
         this.startVal = start;
         this.endVal = end;
-        this.updateFrame();
+        this.requestFrameUpdate();
     }
     resizeCanvas(width, height) {
         this.canvas.width = width;
         this.canvas.height = height;
         this.updateSizeInfo();
-        this.updateFrame();
+        this.requestFrameUpdate();
     }
 }
 //# sourceMappingURL=intervals.js.map

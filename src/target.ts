@@ -1,4 +1,4 @@
-import { Interval } from './interval.js'
+import { IntervalItem } from './interval-item.js'
 import { TargetType } from './target-type.js'
 
 function clamp(value: number, min: number, max: number): number {
@@ -11,7 +11,7 @@ function applyStep(value: number, step: number): number {
 }
 
 export class Target {
-	interval: Interval
+	interval: IntervalItem
 	type: TargetType
 	x: number
 	original: {
@@ -20,7 +20,7 @@ export class Target {
 	}
 
 	constructor(args: {
-		interval: Interval
+		interval: IntervalItem
 		targetType: TargetType
 		x: number
 	}) {

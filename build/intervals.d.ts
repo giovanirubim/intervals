@@ -1,4 +1,4 @@
-import { Interval } from './interval.js';
+import { IntervalItem } from './interval-item.js';
 import { IntervalsOptions } from './intervals-options.js';
 export declare class Intervals {
     private canvas;
@@ -16,17 +16,19 @@ export declare class Intervals {
     private mouseY;
     private mouseIsDown;
     private startClick;
-    onUpdateItem?: (item: Interval) => void;
+    private frameUpdateRequest;
+    private frameIsUpdated;
+    onUpdateItem?: (item: IntervalItem) => void;
     onUpdateView?: (start: number, end: number) => void;
-    onItemClick?: (item: Interval) => void;
+    onItemClick?: (item: IntervalItem) => void;
     constructor(canvas: HTMLCanvasElement, options: IntervalsOptions);
+    private requestFrameUpdate;
     private setCursor;
     private valueToOffsetX;
     private pixelToValueRatio;
     private updateSizeInfo;
     private clearCanvas;
     private drawFrame;
-    private updateFrame;
     private bindMouseEvents;
     private setMouseCoords;
     private setMouseIsDown;
@@ -36,9 +38,7 @@ export declare class Intervals {
     private handleMouseMove;
     private handleScroll;
     private getHoveredTarget;
-    private triggerUpdateHandler;
-    private triggerViewUpdate;
-    setItems(items: Interval[]): void;
+    setItems(items: IntervalItem[]): void;
     updateView(start: number, end: number): void;
     resizeCanvas(width: number, height: number): void;
 }

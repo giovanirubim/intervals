@@ -1,4 +1,4 @@
-import { Interval } from './interval.js'
+import { IntervalItem } from './interval-item.js'
 import { IntervalsOptions } from './intervals-options.js'
 import { Color, Cursor, minMouseDist, minMouseMove } from './presets.js'
 import { Target } from './target.js'
@@ -46,16 +46,17 @@ export class Intervals {
 	private zoomFactor: number
 	private step: number
 
-	private items: Interval[]
+	private items: IntervalItem[] = []
+	private mouseX: number | null = null
+	private mouseY: number | null = null
+	private mouseIsDown: boolean = false
+	private startClick: StartClick | null = null
+	private frameUpdateRequest: number | null = null
+	private frameIsUpdated: boolean = false
 
-	private mouseX: number | null
-	private mouseY: number | null
-	private mouseIsDown: boolean
-	private startClick: StartClick | null
-
-	onUpdateItem?: (item: Interval) => void
+	onUpdateItem?: (item: IntervalItem) => void
 	onUpdateView?: (start: number, end: number) => void
-	onItemClick?: (item: Interval) => void
+	onItemClick?: (item: IntervalItem) => void
 
 	constructor(canvas: HTMLCanvasElement, options: IntervalsOptions) {
 		this.canvas = canvas
@@ -68,15 +69,23 @@ export class Intervals {
 		this.zoomFactor = options.zoomFactor ?? 1.1
 		this.step = options.step ?? 0
 
-		this.items = []
-
-		this.mouseX = null
-		this.mouseY = null
-		this.mouseIsDown = false
-		this.startClick = null
-
 		this.updateSizeInfo()
 		this.bindMouseEvents()
+	}
+	private requestFrameUpdate() {
+		this.frameIsUpdated = false
+
+		if (this.frameUpdateRequest !== null) return
+
+		this.frameUpdateRequest = requestAnimationFrame(() => {
+			this.frameUpdateRequest = null
+
+			if (this.frameIsUpdated) return
+
+			this.clearCanvas()
+			this.drawFrame()
+			this.frameIsUpdated = true
+		})
 	}
 	private setCursor(cursor: Cursor) {
 		this.canvas.style.cursor = cursor
@@ -125,10 +134,6 @@ export class Intervals {
 			ctx.lineTo(endX, itemStartY + itemHeight)
 			ctx.stroke()
 		}
-	}
-	private updateFrame() {
-		this.clearCanvas()
-		this.drawFrame()
 	}
 	private bindMouseEvents() {
 		const { canvas } = this
@@ -224,7 +229,6 @@ export class Intervals {
 	}
 	private handleMouseMove() {
 		const { startClick } = this
-		let rerender = false
 		if (startClick && startClick.target) {
 			const { target } = startClick
 			if (!startClick.moved) {
@@ -243,12 +247,9 @@ export class Intervals {
 					this.maxEnd,
 					this.step
 				)
-				this.triggerUpdateHandler(target.interval)
-				rerender = true
+				this.onUpdateItem?.(target.interval)
+				this.requestFrameUpdate()
 			}
-		}
-		if (rerender) {
-			this.updateFrame()
 		}
 		this.updateCursor()
 	}
@@ -264,8 +265,8 @@ export class Intervals {
 		this.startVal = Math.max(this.minStart, mouseVal - newRange * normalX)
 		this.endVal = Math.min(this.maxEnd, this.startVal + newRange)
 
-		this.triggerViewUpdate()
-		this.updateFrame()
+		this.onUpdateView?.(this.startVal, this.endVal)
+		this.requestFrameUpdate()
 	}
 	private getHoveredTarget(): Target | null {
 		const x = this.mouseX!
@@ -305,15 +306,9 @@ export class Intervals {
 
 		return target
 	}
-	private triggerUpdateHandler(item: Interval) {
-		this.onUpdateItem?.(item)
-	}
-	private triggerViewUpdate() {
-		this.onUpdateView?.(this.startVal, this.endVal)
-	}
-	setItems(items: Interval[]) {
+	setItems(items: IntervalItem[]) {
 		this.items = items
-		this.updateFrame()
+		this.requestFrameUpdate()
 	}
 	updateView(start: number, end: number) {
 		if (start === this.startVal && end === this.endVal) {
@@ -321,12 +316,12 @@ export class Intervals {
 		}
 		this.startVal = start
 		this.endVal = end
-		this.updateFrame()
+		this.requestFrameUpdate()
 	}
 	resizeCanvas(width: number, height: number) {
 		this.canvas.width = width
 		this.canvas.height = height
 		this.updateSizeInfo()
-		this.updateFrame()
+		this.requestFrameUpdate()
 	}
 }

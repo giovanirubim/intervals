@@ -1,7 +1,7 @@
-import { Interval } from './interval.js';
+import { IntervalItem } from './interval-item.js';
 import { TargetType } from './target-type.js';
 export declare class Target {
-    interval: Interval;
+    interval: IntervalItem;
     type: TargetType;
     x: number;
     original: {
@@ -9,7 +9,7 @@ export declare class Target {
         end: number;
     };
     constructor(args: {
-        interval: Interval;
+        interval: IntervalItem;
         targetType: TargetType;
         x: number;
     });
