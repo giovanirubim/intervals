@@ -33,18 +33,27 @@ function hasLeftButton(buttonsCode: number): boolean {
 	return (buttonsCode & 1) !== 0
 }
 
+const defaultOptions = {
+	startVal: 0,
+	endVal: 0,
+	minStart: -Infinity,
+	maxEnd: Infinity,
+	zoomFactor: 1.1,
+	step: 0,
+}
+
 export class Intervals {
 	private canvas: HTMLCanvasElement
 	private ctx: CanvasRenderingContext2D
 	private width: number = 0
 	private height: number = 0
 
-	private startVal: number
-	private endVal: number
-	private minStart: number
-	private maxEnd: number
-	private zoomFactor: number
-	private step: number
+	private startVal: number = defaultOptions.startVal
+	private endVal: number = defaultOptions.endVal
+	private minStart: number = defaultOptions.minStart
+	private maxEnd: number = defaultOptions.maxEnd
+	private zoomFactor: number = defaultOptions.zoomFactor
+	private step: number = defaultOptions.step
 
 	private items: IntervalItem[] = []
 	private mouseX: number | null = null
@@ -53,6 +62,7 @@ export class Intervals {
 	private startClick: StartClick | null = null
 	private frameUpdateRequest: number | null = null
 	private frameIsUpdated: boolean = false
+	private eventListeners: { [key: string]: Function } = {}
 
 	onUpdateItem?: (item: IntervalItem) => void
 	onUpdateView?: (start: number, end: number) => void
@@ -62,15 +72,9 @@ export class Intervals {
 		this.canvas = canvas
 		this.ctx = canvas.getContext('2d')!
 
-		this.startVal = options.startVal
-		this.endVal = options.endVal
-		this.minStart = options.minStart ?? -Infinity
-		this.maxEnd = options.maxEnd ?? Infinity
-		this.zoomFactor = options.zoomFactor ?? 1.1
-		this.step = options.step ?? 0
-
+		this.setOptions(options)
 		this.updateSizeInfo()
-		this.bindMouseEvents()
+		this.bindEventListeners()
 	}
 	private requestFrameUpdate() {
 		this.frameIsUpdated = false
@@ -135,37 +139,53 @@ export class Intervals {
 			ctx.stroke()
 		}
 	}
-	private bindMouseEvents() {
+	private bindEventListeners() {
 		const { canvas } = this
-		canvas.addEventListener('mousedown', (e) => {
+		const mousedown = (e: MouseEvent) => {
 			this.setMouseCoords(...eventCoords(e))
 			if (isLeftButton(e.button)) {
 				this.setMouseIsDown(true)
 			}
-		})
-		canvas.addEventListener('mouseover', (e) => {
+		}
+		const mouseover = (e: MouseEvent) => {
 			this.setMouseIsDown(hasLeftButton(e.buttons))
-		})
-		canvas.addEventListener('mousemove', (e) => {
+		}
+		const mousemove = (e: MouseEvent) => {
 			this.setMouseCoords(...eventCoords(e))
 			if (!hasLeftButton(e.buttons)) {
 				this.setMouseIsDown(false)
 			}
-		})
-		canvas.addEventListener('mouseup', (e) => {
+		}
+		const mouseup = (e: MouseEvent) => {
 			this.setMouseCoords(...eventCoords(e))
 			if (isLeftButton(e.button)) {
 				this.setMouseIsDown(false)
 			}
-		})
-		canvas.addEventListener('mouseleave', (e) => {
+		}
+		const mouseleave = () => {
 			this.setCursor(Cursor.Default)
-		})
-		canvas.addEventListener('wheel', (e) => {
+		}
+		const wheel = (e: WheelEvent) => {
 			if (!this.mouseIsDown) {
 				this.handleScroll(Math.sign(e.deltaY))
 			}
-		})
+		}
+
+		canvas.addEventListener('mousedown', mousedown)
+		canvas.addEventListener('mouseover', mouseover)
+		canvas.addEventListener('mousemove', mousemove)
+		canvas.addEventListener('mouseup', mouseup)
+		canvas.addEventListener('mouseleave', mouseleave)
+		canvas.addEventListener('wheel', wheel)
+
+		this.eventListeners = {
+			mousedown,
+			mouseover,
+			mousemove,
+			mouseup,
+			mouseleave,
+			wheel,
+		}
 	}
 	private setMouseCoords(x: number, y: number) {
 		const { mouseX, mouseY } = this
@@ -306,6 +326,14 @@ export class Intervals {
 
 		return target
 	}
+	setOptions(options: IntervalsOptions) {
+		this.startVal = options.startVal
+		this.endVal = options.endVal
+		this.minStart = options.minStart ?? defaultOptions.minStart
+		this.maxEnd = options.maxEnd ?? defaultOptions.maxEnd
+		this.zoomFactor = options.zoomFactor ?? defaultOptions.zoomFactor
+		this.step = options.step ?? defaultOptions.step
+	}
 	setItems(items: IntervalItem[]) {
 		this.items = items
 		this.requestFrameUpdate()
@@ -323,5 +351,12 @@ export class Intervals {
 		this.canvas.height = height
 		this.updateSizeInfo()
 		this.requestFrameUpdate()
+	}
+	destroy() {
+		const { canvas, eventListeners } = this
+		for (const key in eventListeners) {
+			const listener = eventListeners[key] as EventListener
+			canvas.removeEventListener(key, listener)
+		}
 	}
 }

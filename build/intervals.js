@@ -16,17 +16,25 @@ function isLeftButton(buttonCode) {
 function hasLeftButton(buttonsCode) {
     return (buttonsCode & 1) !== 0;
 }
+const defaultOptions = {
+    startVal: 0,
+    endVal: 0,
+    minStart: -Infinity,
+    maxEnd: Infinity,
+    zoomFactor: 1.1,
+    step: 0,
+};
 export class Intervals {
     canvas;
     ctx;
     width = 0;
     height = 0;
-    startVal;
-    endVal;
-    minStart;
-    maxEnd;
-    zoomFactor;
-    step;
+    startVal = defaultOptions.startVal;
+    endVal = defaultOptions.endVal;
+    minStart = defaultOptions.minStart;
+    maxEnd = defaultOptions.maxEnd;
+    zoomFactor = defaultOptions.zoomFactor;
+    step = defaultOptions.step;
     items = [];
     mouseX = null;
     mouseY = null;
@@ -34,20 +42,16 @@ export class Intervals {
     startClick = null;
     frameUpdateRequest = null;
     frameIsUpdated = false;
+    eventListeners = {};
     onUpdateItem;
     onUpdateView;
     onItemClick;
     constructor(canvas, options) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
-        this.startVal = options.startVal;
-        this.endVal = options.endVal;
-        this.minStart = options.minStart ?? -Infinity;
-        this.maxEnd = options.maxEnd ?? Infinity;
-        this.zoomFactor = options.zoomFactor ?? 1.1;
-        this.step = options.step ?? 0;
+        this.setOptions(options);
         this.updateSizeInfo();
-        this.bindMouseEvents();
+        this.bindEventListeners();
     }
     requestFrameUpdate() {
         this.frameIsUpdated = false;
@@ -108,37 +112,51 @@ export class Intervals {
             ctx.stroke();
         }
     }
-    bindMouseEvents() {
+    bindEventListeners() {
         const { canvas } = this;
-        canvas.addEventListener('mousedown', (e) => {
+        const mousedown = (e) => {
             this.setMouseCoords(...eventCoords(e));
             if (isLeftButton(e.button)) {
                 this.setMouseIsDown(true);
             }
-        });
-        canvas.addEventListener('mouseover', (e) => {
+        };
+        const mouseover = (e) => {
             this.setMouseIsDown(hasLeftButton(e.buttons));
-        });
-        canvas.addEventListener('mousemove', (e) => {
+        };
+        const mousemove = (e) => {
             this.setMouseCoords(...eventCoords(e));
             if (!hasLeftButton(e.buttons)) {
                 this.setMouseIsDown(false);
             }
-        });
-        canvas.addEventListener('mouseup', (e) => {
+        };
+        const mouseup = (e) => {
             this.setMouseCoords(...eventCoords(e));
             if (isLeftButton(e.button)) {
                 this.setMouseIsDown(false);
             }
-        });
-        canvas.addEventListener('mouseleave', (e) => {
+        };
+        const mouseleave = () => {
             this.setCursor(Cursor.Default);
-        });
-        canvas.addEventListener('wheel', (e) => {
+        };
+        const wheel = (e) => {
             if (!this.mouseIsDown) {
                 this.handleScroll(Math.sign(e.deltaY));
             }
-        });
+        };
+        canvas.addEventListener('mousedown', mousedown);
+        canvas.addEventListener('mouseover', mouseover);
+        canvas.addEventListener('mousemove', mousemove);
+        canvas.addEventListener('mouseup', mouseup);
+        canvas.addEventListener('mouseleave', mouseleave);
+        canvas.addEventListener('wheel', wheel);
+        this.eventListeners = {
+            mousedown,
+            mouseover,
+            mousemove,
+            mouseup,
+            mouseleave,
+            wheel,
+        };
     }
     setMouseCoords(x, y) {
         const { mouseX, mouseY } = this;
@@ -264,6 +282,14 @@ export class Intervals {
         }
         return target;
     }
+    setOptions(options) {
+        this.startVal = options.startVal;
+        this.endVal = options.endVal;
+        this.minStart = options.minStart ?? defaultOptions.minStart;
+        this.maxEnd = options.maxEnd ?? defaultOptions.maxEnd;
+        this.zoomFactor = options.zoomFactor ?? defaultOptions.zoomFactor;
+        this.step = options.step ?? defaultOptions.step;
+    }
     setItems(items) {
         this.items = items;
         this.requestFrameUpdate();
@@ -281,6 +307,13 @@ export class Intervals {
         this.canvas.height = height;
         this.updateSizeInfo();
         this.requestFrameUpdate();
+    }
+    destroy() {
+        const { canvas, eventListeners } = this;
+        for (const key in eventListeners) {
+            const listener = eventListeners[key];
+            canvas.removeEventListener(key, listener);
+        }
     }
 }
 //# sourceMappingURL=intervals.js.map

@@ -18,6 +18,7 @@ export declare class Intervals {
     private startClick;
     private frameUpdateRequest;
     private frameIsUpdated;
+    private eventListeners;
     onUpdateItem?: (item: IntervalItem) => void;
     onUpdateView?: (start: number, end: number) => void;
     onItemClick?: (item: IntervalItem) => void;
@@ -29,7 +30,7 @@ export declare class Intervals {
     private updateSizeInfo;
     private clearCanvas;
     private drawFrame;
-    private bindMouseEvents;
+    private bindEventListeners;
     private setMouseCoords;
     private setMouseIsDown;
     private updateCursor;
@@ -38,7 +39,9 @@ export declare class Intervals {
     private handleMouseMove;
     private handleScroll;
     private getHoveredTarget;
+    setOptions(options: IntervalsOptions): void;
     setItems(items: IntervalItem[]): void;
     updateView(start: number, end: number): void;
     resizeCanvas(width: number, height: number): void;
+    destroy(): void;
 }
